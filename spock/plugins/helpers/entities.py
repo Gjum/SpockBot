@@ -1,12 +1,9 @@
 """
 An entity tracker
 """
-import logging
-
 from spock.plugins.base import PluginBase
-from spock.utils import Info, pl_announce
-
-logger = logging.getLogger('spock')
+from spock.utils import Info, Position, pl_announce
+from spock.vector import Vector3
 
 
 class MCEntity(Info):
@@ -19,10 +16,7 @@ class ClientPlayerEntity(MCEntity):
     metadata = None
 
 
-class MovementEntity(MCEntity):
-    x = 0
-    y = 0
-    z = 0
+class MovementEntity(MCEntity, Position):
     yaw = 0
     pitch = 0
     on_ground = True
@@ -52,28 +46,29 @@ class MobEntity(MovementEntity):
     metadata = None
 
 
-class PaintingEntity(MCEntity):
+class PaintingEntity(MCEntity, Position):
     title = ""
-    location = {
-        'x': 0,
-        'y': 0,
-        'z': 0,
-    }
     direction = 0
 
+    @property
+    def location(self):
+        return {
+            'x': self.x,
+            'y': self.y,
+            'z': self.z,
+        }
 
-class ExpEntity(MCEntity):
-    x = 0
-    y = 0
-    z = 0
+    @location.setter
+    def location(self, value):
+        self.x, self.y, self.z = Vector3(value)
+
+
+class ExpEntity(MCEntity, Position):
     count = 0
 
 
-class GlobalEntity(MCEntity):
+class GlobalEntity(MCEntity, Position):
     global_type = 0
-    x = 0
-    y = 0
-    z = 0
 
 
 class EntityCore(object):
