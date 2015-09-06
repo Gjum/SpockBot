@@ -41,6 +41,8 @@ class Position(Vector3, Info):
         d['x'], d['y'], d['z'] = self
         return d
 
+    set_dict = Info.set_dict
+
 
 class BoundingBox(Vector3):
     def __init__(self, w, h, d=None):
