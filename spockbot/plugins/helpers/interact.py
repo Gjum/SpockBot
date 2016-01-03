@@ -258,6 +258,40 @@ class InteractPlugin(PluginBase):
     def jump_vehicle(self):
         self.steer_vehicle(jump=True)
 
+    def enchant_item(self, enchantment_nr):
+        if enchantment_nr not in range(3):
+            raise ValueError('enchantment_nr must be 0, 1, or 2, not "%s"'
+                             % enchantment_nr)
+
+        inv_type = self.inventory.window.inv_type
+        if inv_type != 'minecraft:enchanting_table':  # sic
+            raise ValueError('Can only enchant items in enchantment window, '
+                             'but open window is "%s"' % inv_type)
+
+        self.net.push_packet('PLAY>Enchant Item', {
+            'enchantment': enchantment_nr,
+            'window_id': self.inventory.window.window_id,
+        })
+
+    def set_item_name(self, name):
+        """Set the name of the item in the open anvil"""
+        inv_type = self.inventory.window.inv_type
+        if inv_type != 'minecraft:anvil':
+            raise ValueError('Can only rename items in anvil window, '
+                             'but open window is "%s"' % inv_type)
+
+        self.channels.send('MC|ItemName', name.encode('ascii'))
+
+    def select_trade(self, index):
+        """Select a trade in the active villager trading window"""
+        inv_type = self.inventory.window.inv_type
+        if inv_type != 'minecraft:villager':
+            raise ValueError('Can only select trade in villager window, '
+                             'but open window is "%s"' % inv_type)
+
+        # TODO check index against available trades
+        self.channels.send('MC|TrSel', int(index))
+
     def write_book(self, text, author="", title="", sign=False):
         """Write text to the current book in hand, optionally sign the book"""
         book = self._setup_book()
