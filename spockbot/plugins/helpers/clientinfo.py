@@ -99,6 +99,10 @@ class ClientInfo(object):
     def eye_pos(self):
         return self.position + Vector3(0, const.PLAYER_EYE_HEIGHT, 0)
 
+    @property
+    def mounted(self):
+        return self.attached_entity is not None
+
     def reset(self):
         """Resets the information in ClientInfo"""
         self.__init__()
