@@ -5,7 +5,7 @@ Interact with the world:
 - dig/place/use blocks
 - use the held (active) item
 - use/attack entities
-- steer vehicles
+- un-/mount vehicles
 - place and write signs
 - edit and sign books
 
@@ -31,7 +31,6 @@ class InteractPlugin(PluginBase):
         ploader.provides('Interact', self)
 
         self.sneaking = False
-        self.sprinting = False
         self.dig_pos_dict = {'x': 0, 'y': 0, 'z': 0}
 
         self.auto_swing = True  # move arm when clicking
@@ -41,9 +40,8 @@ class InteractPlugin(PluginBase):
         self.net.push_packet('PLAY>Animation', {})
 
     def _entity_action(self, action, jump_boost=100):
-        entity_id = self.clientinfo.eid
         self.net.push_packet('PLAY>Entity Action', {
-            'eid': entity_id,
+            'eid': self.clientinfo.eid,
             'action': action,
             'jump_boost': jump_boost,
         })
@@ -52,20 +50,15 @@ class InteractPlugin(PluginBase):
         self._entity_action(constants.ENTITY_ACTION_LEAVE_BED)
 
     def sneak(self, sneak=True):
+        if self.sneaking == sneak:
+            return
         self._entity_action(constants.ENTITY_ACTION_SNEAK
                             if sneak else constants.ENTITY_ACTION_UNSNEAK)
-        self.sneaking = sneak
+        # sneaking when mounted results in being unmounted, but not sneaking
+        self.sneaking = sneak and not self.clientinfo.mounted
 
     def unsneak(self):
         self.sneak(False)
-
-    def sprint(self, sprint=True):
-        self._entity_action(constants.ENTITY_ACTION_START_SPRINT if sprint
-                            else constants.ENTITY_ACTION_STOP_SPRINT)
-        self.sprinting = sprint
-
-    def unsprint(self):
-        self.sprint(False)
 
     def jump_horse(self, jump_boost=100):
         self._entity_action(constants.ENTITY_ACTION_JUMP_HORSE, jump_boost)
@@ -241,6 +234,7 @@ class InteractPlugin(PluginBase):
 
     def steer_vehicle(self, left=0.0, forward=0.0,
                       jump=False, unmount=False):
+        # xxx move to physics completely?
         flags = 0
         if jump:
             flags += 1
@@ -255,7 +249,7 @@ class InteractPlugin(PluginBase):
     def unmount_vehicle(self):
         self.steer_vehicle(unmount=True)
 
-    def jump_vehicle(self):
+    def jump_vehicle(self):  # TODO pig?
         self.steer_vehicle(jump=True)
 
     def write_book(self, text, author="", title="", sign=False):

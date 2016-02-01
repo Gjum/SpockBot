@@ -10,7 +10,6 @@ AKA this file does Minecraft physics
 """
 
 import collections
-import logging
 import math
 
 from spockbot.mcdata import blocks, constants as const
@@ -19,9 +18,7 @@ from spockbot.plugins.base import PluginBase, pl_announce
 from spockbot.plugins.tools import collision
 from spockbot.vector import Vector3
 
-logger = logging.getLogger('spockbot')
-
-FP_MAGIC = 1e-4
+FP_CLOSE = 1e-4
 
 
 class PhysicsCore(object):
@@ -33,7 +30,11 @@ class PhysicsCore(object):
         self.abilities = abilities
         self.direction = Vector3()
 
-    def jump(self):
+    def jump(self, horse_jump_boost=100):
+        if mounted:
+            self.interact._entity_action(const.ENTITY_ACTION_JUMP_HORSE,
+                                         horse_jump_boost)
+        # xxx
         if self.pos.on_ground:
             if self.sprinting:
                 ground_speed = Vector3(self.vec.x, 0, self.vec.z)
@@ -42,12 +43,18 @@ class PhysicsCore(object):
             self.vec.y = const.PHY_JMP_ABS
 
     def walk(self):
+        if self.sprinting:
+            self.interact._entity_action(const.ENTITY_ACTION_STOP_SPRINT)
         self.sprinting = False
         self.move_accel = self.abilities.walking_speed
 
     def sprint(self):
+        if not self.sprinting:
+            self.interact._entity_action(const.ENTITY_ACTION_START_SPRINT)
         self.sprinting = True
         self.move_accel = self.abilities.walking_speed * const.PHY_SPR_MUL
+
+    # TODO sneaking?
 
     def move_target(self, vector):
         self.direction = vector - self.pos
@@ -66,13 +73,11 @@ class PhysicsCore(object):
 
 @pl_announce('Physics')
 class PhysicsPlugin(PluginBase):
-    requires = ('Event', 'ClientInfo', 'Net', 'World')
+    requires = ('Event', 'ClientInfo', 'Interact', 'Net', 'World')
     events = {
         'physics_tick': 'physics_tick',
         'client_tick': 'client_tick',
         'client_position_update': 'skip_physics',
-        'client_mount': 'suspend_physics',
-        'client_unmount': 'resume_physics',
     }
 
     def __init__(self, ploader, settings):
@@ -86,31 +91,39 @@ class PhysicsPlugin(PluginBase):
         self.pc = PhysicsCore(self.pos, self.vec, self.clientinfo.abilities)
         ploader.provides('Physics', self.pc)
 
-    def skip_physics(self, _=None, __=None):
+    def skip_physics(self, *_):
         self.vec.zero()
         self.skip_tick = True
 
-    def suspend_physics(self, _=None, __=None):
-        self.vec.zero()
-        self.event.unreg_event_handler('physics_tick', self.physics_tick)
-
-    def resume_physics(self, _=None, __=None):
-        self.event.reg_event_handler('physics_tick', self.physics_tick)
-
     def client_tick(self, name, data):
-        self.net.push_packet('PLAY>Player Position and Look',
-                             self.clientinfo.position.get_dict())
+        if self.clientinfo.mounted:
+            self.net.push_packet('PLAY>Player Look',
+                                 self.clientinfo.position.get_dict())
+            self.net.push_packet('PLAY>Steer Vehicle', {
+                'sideways': 0.0,
+                'forward': self.pc.direction.dist(),
+                'flags': 0,  # xxx no jump/unmount
+            })
+        else:
+            self.net.push_packet('PLAY>Player Position and Look',
+                                 self.clientinfo.position.get_dict())
 
-    def physics_tick(self, _, __):
+    def physics_tick(self, *_):
         if self.skip_tick:
             self.skip_tick = False
             return
-        self.apply_accel()
-        mtv = self.get_mtv()
-        self.apply_vector(mtv)
-        self.pos.on_ground = mtv.y > 0
-        self.vec -= Vector3(0, const.PHY_GAV_ACC, 0)
-        self.apply_drag()
+
+        if self.clientinfo.mounted:
+            self.interact.look_at_rel(self.pc.direction)
+            # xxx all other calculations done in client_tick
+        else:
+            self.apply_accel()
+            mtv = self.get_mtv()
+            self.apply_vector(mtv)
+            self.pos.on_ground = mtv.y > 0
+            self.vec -= Vector3(0, const.PHY_GAV_ACC, 0)
+            self.apply_drag()
+
         self.pc.direction = Vector3()
 
     def get_block_slip(self):
@@ -154,10 +167,10 @@ class PhysicsPlugin(PluginBase):
                 break
             for vector in transform_vectors:
                 test_vec = self.vec + current_vector + vector
-                if test_vec.dist_sq() <= self.vec.dist_sq() + FP_MAGIC:
+                if test_vec.dist_sq() <= self.vec.dist_sq() + FP_CLOSE:
                     q.append(current_vector + vector)
         else:
-            logger.debug('Physics failed to generate an MTV, bailing out')
+            self.event.emit('physics_bail')
             self.vec.zero()
             return Vector3()
         possible_mtv = [current_vector]
