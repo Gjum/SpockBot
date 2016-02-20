@@ -10,10 +10,10 @@ class TaskManager(PluginBase):
         super(TaskManager, self).__init__(ploader, settings)
         ploader.provides('TaskManager', self)
 
-    def run_task(self, task, parent=None, name=None):
+    def start_task(self, task, parent=None, name=None):
         if not isinstance(task, Task):
             task = Task(task, parent, name)
         if parent:
             parent.last_child = task
-        task.run(self)
+        task.start(self)
         return task

@@ -119,7 +119,7 @@ class TaskManagerTest(TestCase):
         task = some_task(levels)
         parent = SomeParent()
 
-        ret = self.task_manager.run_task(task, parent)
+        ret = self.task_manager.start_task(task, parent)
         self.assertIsInstance(ret, Task)
 
         emit_them(levels)
@@ -190,7 +190,7 @@ class TaskManagerTest(TestCase):
                 self.fail('Exception not passed into task')
 
         task = top_task()
-        ret = self.task_manager.run_task(task)
+        ret = self.task_manager.start_task(task)
         self.assertIsInstance(ret, Task)
 
         self.assertEqual('started', last_data[0])

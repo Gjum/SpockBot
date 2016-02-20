@@ -28,7 +28,7 @@ class CraftPlugin(PluginBase):
         else:
             recipe = get_any_recipe(item, meta)
         if recipe:
-            self.taskmanager.run_task(self.craft_task(recipe, amount), parent)
+            self.taskmanager.start_task(self.craft_task(recipe, amount), parent)
         return recipe
 
     def craft_task(self, recipe, amount=1):

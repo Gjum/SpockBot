@@ -94,27 +94,12 @@ class TaskFailed(Exception):
         return s
 
 
-class TaskCallback(object):
-    def __init__(self, cb=None, eb=None):
-        self.cb = cb
-        self.eb = eb
-
-    def on_success(self, data):
-        if self.cb:
-            self.cb(data)
-
-    def on_error(self, error):
-        if self.eb:
-            self.eb(error)
-
-
-class Task(object):
-    def __init__(self, task, parent=None, name=None):
-        self.name = name or task.__name__
-        self.task = task
+class TaskApi(object):
+    def __init__(self, parent=None, name=None):
         self.parent = parent
+        self.name = name
         self.last_child = None
-        self.expected = {}  # event -> check
+        self.task_manager = None
 
     @property
     def tasktrace(self):
@@ -129,9 +114,44 @@ class Task(object):
         else:
             return [self]
 
-    def run(self, task_manager):
+    def start(self, task_manager):
         self.task_manager = task_manager
-        self.continue_with(lambda: next(self.task))
+
+    def kill(self):
+        raise NotImplementedError
+
+    def on_success(self, data):
+        pass
+
+    def on_error(self, exception):
+        raise exception
+
+
+class TaskCallback(TaskApi):
+    def __init__(self, task, cb=None, eb=None):
+        super(TaskCallback, self).__init__(task)
+        self.cb = cb
+        self.eb = eb
+
+    def on_success(self, data):
+        if self.cb:
+            self.cb(data)
+
+    def on_error(self, error):
+        if self.eb:
+            self.eb(error)
+
+
+class Task(TaskApi):
+    def __init__(self, coro, parent=None, name=None):
+        super(Task, self).__init__(parent, name)
+        self.name = name or coro.__name__
+        self.coro = coro
+        self.expected = {}  # event -> check
+
+    def start(self, task_manager):
+        self.task_manager = task_manager
+        self.continue_with(lambda: next(self.coro))
 
     def continue_with(self, func):
         try:
@@ -150,10 +170,10 @@ class Task(object):
             self.register(response)
 
     def on_success(self, data):
-        self.continue_with(lambda: self.task.send((None, data)))
+        self.continue_with(lambda: self.coro.send((None, data)))
 
     def on_error(self, exception):
-        self.continue_with(lambda: self.task.throw(exception))
+        self.continue_with(lambda: self.coro.throw(exception))
 
     def register(self, response):
         self.expected.clear()
@@ -164,7 +184,7 @@ class Task(object):
     def on_event(self, event, data):
         check = self.expected.get(event, None)
         if check and check(event, data):  # TODO does check really need event?
-            self.continue_with(lambda: self.task.send((event, data)))
+            self.continue_with(lambda: self.coro.send((event, data)))
         return EVENT_UNREGISTER  # remove this handler
 
     def parse_response(self, response):
@@ -177,7 +197,7 @@ class Task(object):
         # - other (func): evt name + test func
 
         if isinstance(response, types.GeneratorType):  # subtask
-            self.task_manager.run_task(response, parent=self)
+            self.task_manager.start_task(response, parent=self)
         elif isinstance(response, str):  # event name
             self.expected[response] = accept
         elif hasattr(response, '__getitem__'):
