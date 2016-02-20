@@ -15,30 +15,47 @@ class CraftPlugin(PluginBase):
     def __init__(self, ploader, settings):
         super(CraftPlugin, self).__init__(ploader, settings)
         ploader.provides('Craft', self)
+        self.current_recipe = None
+        self.current_amount = 0
 
     def craft(self, item=None, meta=None, amount=1, recipe=None, parent=None):
         """
         Starts a ``craft_task``. Either ``item`` or ``recipe`` has to be given.
 
+        If a crafting task is already running, raises a ValueError.
+
         Returns:
             Optional[Recipe]: The recipe used for crafting.
         """
+        if self.current_recipe:
+            raise ValueError('Already crafting something else')
+
         if recipe:
             item, meta, _ = recipe.result
         else:
             recipe = get_any_recipe(item, meta)
+
         if recipe:
-            self.taskmanager.start_task(self.craft_task(recipe, amount), parent)
+            coro = self.craft_task(recipe, amount)
+            name = 'Craft %s %s:%s' % (amount, item, meta)
+            self.taskmanager.start_task(coro, parent, name)
+
         return recipe
 
     def craft_task(self, recipe, amount=1):
         """
         A task that crafts ``amount`` items with ``recipe``.
         """
+        if self.current_recipe:
+            raise TaskFailed('[Craft] Already crafting something else')
+
         if not recipe:
             raise TaskFailed('[Craft] No recipe given: %s' % recipe)
         if amount <= 0:
             raise TaskFailed('[Craft] Nothing to craft, amount=%s' % amount)
+
+        self.current_recipe = recipe
+        self.current_amount = amount
 
         inv = self.inventory
         craft_times = int(ceil(amount / recipe.result.amount))
