@@ -5,12 +5,12 @@ from math import ceil
 
 from spockbot.mcdata.recipes import get_any_recipe
 from spockbot.plugins.base import PluginBase, pl_announce
-from spockbot.plugins.tools.task import TaskFailed
+from spockbot.plugins.tools.task import TaskEmitter, TaskFailed
 
 
 @pl_announce('Craft')
 class CraftPlugin(PluginBase):
-    requires = ('Inventory', 'TaskManager')
+    requires = ('Event', 'Inventory', 'TaskManager')
 
     def __init__(self, ploader, settings):
         super(CraftPlugin, self).__init__(ploader, settings)
@@ -36,6 +36,8 @@ class CraftPlugin(PluginBase):
             recipe = get_any_recipe(item, meta)
 
         if recipe:
+            if not parent:
+                parent = TaskEmitter(self.event, 'craft_done', 'craft_error')
             coro = self.craft_task(recipe, amount)
             name = 'Craft %s %s:%s' % (amount, item, meta)
             self.taskmanager.start_task(coro, parent, name)
