@@ -142,6 +142,22 @@ class TaskCallback(TaskApi):
             self.eb(error)
 
 
+class TaskEmitter(TaskApi):
+    def __init__(self, event_plugin, success=None, error=None):
+        super(TaskEmitter, self).__init__()
+        self.event_plugin = event_plugin
+        self.success = success
+        self.error = error
+
+    def on_success(self, data):
+        if self.success:
+            self.event_plugin.emit(self.success, data)
+
+    def on_error(self, error):
+        if self.error:
+            self.event_plugin.emit(self.error, error)
+
+
 class Task(TaskApi):
     def __init__(self, coro, parent=None, name=None):
         super(Task, self).__init__(parent, name)
